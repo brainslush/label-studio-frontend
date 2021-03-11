@@ -65,6 +65,7 @@ import "./TimeSeries/Channel";
  * @param {boolean} [fixedScale=false] always scale y-axis to the maximum to fit all the values; if false current view scales to fit only displayed values
  * @param {number} [lowerBound] scale y-axis to the set lower value. Respects the value of fixedScale.
  * @param {number} [upperBound] scale y-axis to the set upper value. Respects the value of fixedScale.
+ * @param {string} [plotStyle]
  */
 const TagAttrs = types.model({
   name: types.identifier,
@@ -76,6 +77,7 @@ const TagAttrs = types.model({
   timeformat: "",
   timedisplayformat: "",
   overviewchannels: "", // comma-separated list of channels to show
+  plotstyle: "line",
 
   fixedscale: false,
   upperbound: 0.0,

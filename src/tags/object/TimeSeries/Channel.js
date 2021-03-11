@@ -30,6 +30,7 @@ import { errorBuilder } from "../../../core/DataValidator/ConfigValidator";
  * @param {boolean} [fixedScale] if false current view scales to fit only displayed values; if given overwrites TimeSeries' fixedScale
  * @param {number} [lowerBound] scale y-axis to the set lower value. Respects the value of fixedScale.
  * @param {number} [upperBound] scale y-axis to the set upper value. Respects the value of fixedScale.
+ * @param {string=} [plotStyle=line] set plot style, can be line, circle,
  */
 
 const csMap = {
@@ -61,6 +62,7 @@ const TagAttrs = types.model({
 
   strokewidth: types.optional(types.string, "1"),
   strokecolor: types.optional(types.string, "#1f77b4"),
+  plotstyle: types.optional(types.string, "line"),
   lowerbound: types.maybe(types.string),
   upperbound: types.maybe(types.string),
   fixedscale: types.maybe(types.boolean),
@@ -461,6 +463,7 @@ class ChannelD3 extends React.Component {
     const { data, item, range, time, column } = this.props;
     const { isDate, formatTime, margin, slicesCount } = item.parent;
     const height = this.height;
+    const plotStyle = item.plotstyle;
     this.zoomStep = slicesCount;
     const clipPathId = `clip_${item.id}`;
 
@@ -563,19 +566,36 @@ class ChannelD3 extends React.Component {
     this.main = main;
 
     const pathContainer = main.append("g").attr("clip-path", `url("#${clipPathId}")`);
-    this.path = pathContainer
-      .append("path")
-      .datum(this.useOptimizedData ? this.optimizedSeries : series)
-      .attr("d", this.line);
-    // to render different zoomed slices of path
-    this.path2 = pathContainer.append("path");
 
-    pathContainer
-      .selectAll("path")
-      .attr("vector-effect", "non-scaling-stroke")
-      .attr("fill", "none")
-      .attr("stroke-width", item.strokewidth || 1)
-      .attr("stroke", item.strokecolor || "steelblue");
+    if (plotStyle != "line") {
+      pathContainer
+        .selectAll(".scatter")
+        .data(this.useOptimizedData ? this.optimizedSeries : series)
+        .enter()
+        .append(plotStyle)
+        .attr("class", "scatter")
+        .attr("cy", d => this.y(d[column]))
+        .attr("cx", d => this.plotX(d[time]))
+        .attr("r", 2)
+        .attr("fill", item.strokecolor || "steelblue");
+      this.path = pathContainer;
+      this.path2 = this.path;
+    }
+    if (plotStyle == "line") {
+      this.path = pathContainer
+        .append("path")
+        .datum(this.useOptimizedData ? this.optimizedSeries : series)
+        .attr("d", this.line);
+      // to render different zoomed slices of path
+      this.path2 = pathContainer.append("path");
+
+      pathContainer
+        .selectAll("path")
+        .attr("vector-effect", "non-scaling-stroke")
+        .attr("fill", "none")
+        .attr("stroke-width", item.strokewidth || 1)
+        .attr("stroke", item.strokecolor || "steelblue");
+    }
 
     this.renderTracker();
     this.renderYAxis();
@@ -624,11 +644,13 @@ class ChannelD3 extends React.Component {
     const { item } = this.props;
     // overwrite parent's
     const fixedscale = item.fixedscale === undefined ? item.parent.fixedscale : item.fixedscale;
+    const plotStyle = item.plotstyle;
+
+    const { data, time, column } = this.props;
+    const values = data[column];
 
     if (!fixedscale || item.lowerbound !== undefined || item.upperbound !== undefined) {
       // array slice may slow it down, so just find a min-max by ourselves
-      const { data, time, column } = this.props;
-      const values = data[column];
 
       let min = Math.min(...values);
       let max = Math.max(...values);
@@ -677,24 +699,31 @@ class ChannelD3 extends React.Component {
       }
     }
 
-    if (this.useOptimizedData) {
-      this.path.attr("transform", `translate(${translate} ${translateY}) scale(${scale} ${scaleY})`);
-      this.path.attr("transform-origin", `left ${originY}`);
-      this.path2.attr("d", "");
-    } else {
-      if (this.optimizedSeries) {
-        this.path.datum(this.slices[left]);
-        this.path.attr("d", this.lineSlice);
-        if (left !== right) {
-          this.path2.datum(this.slices[right]);
-          this.path2.attr("d", this.lineSlice);
+    if (plotStyle == "line") {
+      if (this.useOptimizedData) {
+        this.path.attr("transform", `translate(${translate} ${translateY}) scale(${scale} ${scaleY})`);
+        this.path.attr("transform-origin", `left ${originY}`);
+        this.path2.attr("d", "");
+      } else {
+        if (this.optimizedSeries) {
+          this.path.datum(this.slices[left]);
+          this.path.attr("d", this.lineSlice);
+          if (left !== right) {
+            this.path2.datum(this.slices[right]);
+            this.path2.attr("d", this.lineSlice);
+          } else {
+            this.path2.attr("d", "");
+          }
         } else {
+          this.path.attr("d", this.lineSlice);
           this.path2.attr("d", "");
         }
-      } else {
-        this.path.attr("d", this.lineSlice);
-        this.path2.attr("d", "");
       }
+    } else {
+      this.path
+        .selectAll(".scatter")
+        .attr("cy", d => this.y(d[column]))
+        .attr("cx", d => this.plotX(d[time]) * scale + translate);
     }
 
     this.renderXAxis();
